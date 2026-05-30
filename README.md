@@ -34,6 +34,10 @@ node _verify/run_engine_tests.mjs
 
 Expected output: `29 passed, 0 failed.`
 
+## Updating the live site
+
+Edit `harmonics_calculator.html` (the canonical file). On commit the pre-commit hook runs `./sync.sh` which mirrors it to `index.html` (what GitHub Pages serves). Then `git push` and Pages redeploys in about a minute.
+
 ## Math
 
 The engine is a direct port of the VBA `EnumerateTuples` + `EvaluateAndStore` routines from `harmonics_v3.xlsm`:
