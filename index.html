@@ -207,6 +207,7 @@
       <div class="results-scroll"><table id="results-table"><thead></thead><tbody></tbody></table></div>
     </section>
   </main>
+  <input type="file" id="csv-import-input" accept=".csv,text/csv" style="display:none">
 
   <script type="module" id="engine">
     // ── ENGINE ── pure math. No DOM, no globals beyond exports.
@@ -560,8 +561,103 @@
       return lines.join('\r\n') + '\r\n';
     }
 
+    // fromCSV(csv) → { rows, errors }
+    // rows: [{freq, source, order, jrfl, inBand}] — same shape calculate() emits.
+    // errors: string[] — header mismatch (then rows=[]) or per-row skips with
+    //   "Skipped line N: <reason>" messages.
+    //
+    // Header (first non-empty line, BOM-stripped) must equal exactly:
+    //   'Freq (MHz),Source,Order,JRFL,In bounds'
+    // Surrounding whitespace tolerated. CR/LF/CRLF line endings handled.
+    //
+    // Boolean parser accepts: TRUE/FALSE, true/false, 1/0, yes/no, ✓
+    // (case-insensitive). Empty / missing → false.
+    // Anything else → row skipped with warning.
+    export function fromCSV(csv) {
+      const EXPECTED_HEADER = 'Freq (MHz),Source,Order,JRFL,In bounds';
+      const errors = [];
+      if (typeof csv !== 'string' || csv.trim().length === 0) {
+        return { rows: [], errors: ['Empty file'] };
+      }
+      // Strip UTF-8 BOM if present (Excel often prepends it).
+      const text = csv.charCodeAt(0) === 0xFEFF ? csv.slice(1) : csv;
+      const lines = text.split(/\r\n|\n|\r/);
+
+      // Find first non-empty line as the header.
+      let headerIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim().length > 0) { headerIdx = i; break; }
+      }
+      if (headerIdx < 0) return { rows: [], errors: ['Empty file'] };
+
+      const headerFields = lines[headerIdx].split(',').map(s => s.trim());
+      const expectedFields = EXPECTED_HEADER.split(',');
+      const headerMatches =
+        headerFields.length === expectedFields.length &&
+        headerFields.every((f, i) => f === expectedFields[i]);
+      if (!headerMatches) {
+        return {
+          rows: [],
+          errors: [`Header mismatch: expected '${EXPECTED_HEADER}', got '${lines[headerIdx].trim()}'`]
+        };
+      }
+
+      function parseBool(raw) {
+        const v = String(raw ?? '').trim().toLowerCase();
+        if (v === '') return { ok: true, value: false };
+        if (v === 'true'  || v === '1' || v === 'yes' || v === 'y' || v === '✓') {
+          return { ok: true, value: true };
+        }
+        if (v === 'false' || v === '0' || v === 'no'  || v === 'n') {
+          return { ok: true, value: false };
+        }
+        return { ok: false, value: false };
+      }
+
+      const rows = [];
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const raw = lines[i];
+        if (raw.trim().length === 0) continue;
+        const cells = raw.split(',');
+        if (cells.length < 5) {
+          errors.push(`Skipped line ${i + 1}: expected 5 columns, got ${cells.length}`);
+          continue;
+        }
+        const freq = Number(cells[0]);
+        if (!Number.isFinite(freq)) {
+          errors.push(`Skipped line ${i + 1}: non-numeric freq '${cells[0]}'`);
+          continue;
+        }
+        const source = cells[1].trim();
+        if (source.length === 0) {
+          errors.push(`Skipped line ${i + 1}: empty source`);
+          continue;
+        }
+        const orderNum = Number(cells[2]);
+        if (!Number.isFinite(orderNum) || orderNum < 0 || !Number.isInteger(orderNum)) {
+          errors.push(`Skipped line ${i + 1}: invalid order '${cells[2]}'`);
+          continue;
+        }
+        const jrflP = parseBool(cells[3]);
+        if (!jrflP.ok) {
+          errors.push(`Skipped line ${i + 1}: invalid JRFL '${cells[3]}'`);
+          continue;
+        }
+        const bandP = parseBool(cells[4]);
+        if (!bandP.ok) {
+          errors.push(`Skipped line ${i + 1}: invalid In bounds '${cells[4]}'`);
+          continue;
+        }
+        rows.push({
+          freq, source, order: orderNum,
+          jrfl: jrflP.value, inBand: bandP.value
+        });
+      }
+      return { rows, errors };
+    }
+
     // Exposed so tests module can import.
-    window.__engine = { harmonics, classify, enumerateIMD, calculate, buildPivot, toCSV,
+    window.__engine = { harmonics, classify, enumerateIMD, calculate, buildPivot, toCSV, fromCSV,
                         MAX_ORDER_HARD_CAP, PER_ROW_PRODUCT_CAP, AUTO_WIDTH_K,
                         JRFL_TOL_MHZ, HEAVY_COMPUTE_THRESHOLD };
   </script>
@@ -925,7 +1021,10 @@
 
       const jrflHits = result.rows.filter(r => r.jrfl).length;
       sum.replaceChildren();
-      sum.append(`${result.rows.length} products, ${jrflHits} JRFL hits.`);
+      const importNote = result.importedFrom
+        ? ` (imported from ${result.importedFrom})`
+        : '';
+      sum.append(`${result.rows.length} products, ${jrflHits} JRFL hits${importNote}.`);
       sum.append(renderViewToggle(result));
 
       if (viewMode === 'pivot') {
@@ -955,6 +1054,37 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    function importCSV() {
+      const input = document.getElementById('csv-import-input');
+      input.value = '';   // allow re-importing the same file
+      input.click();
+    }
+
+    document.getElementById('csv-import-input').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const { rows, errors } = window.__engine.fromCSV(String(reader.result ?? ''));
+        renderResults({
+          rows,
+          warnings: errors,
+          capBanners: [],
+          sectionsRun: { harmonics: 0, sfImd: 0, mtImd: 0 },
+          estimatedCombos: 0,
+          importedFrom: file.name
+        });
+      };
+      reader.onerror = () => {
+        renderResults({
+          rows: [],
+          warnings: ['Failed to read file: ' + (reader.error?.message ?? 'unknown')],
+          capBanners: [], sectionsRun: {}, estimatedCombos: 0
+        });
+      };
+      reader.readAsText(file);
+    });
+
     function renderViewToggle(result) {
       const wrap = el('span', { class: 'view-toggle' });
       const mkBtn = (label, mode) => el('button', {
@@ -969,6 +1099,11 @@
         onclick: () => downloadCSV(result)
       }, 'Export CSV');
       wrap.append(exportBtn);
+      const importBtn = el('button', {
+        title: 'Load a CSV with the same columns as Export CSV',
+        onclick: () => importCSV()
+      }, 'Import CSV');
+      wrap.append(importBtn);
       return wrap;
     }
 
@@ -1388,6 +1523,54 @@
         '200,H_2,2,FALSE,TRUE\r\n' +
         '300,H_3,3,TRUE,FALSE\r\n';
       assertEqual(toCSV(rows), expected);
+    });
+
+    // ── fromCSV() ───────────────────────────────────────────────────
+    const { fromCSV } = window.__engine;
+
+    test('fromCSV: round-trip with toCSV preserves rows', () => {
+      const rows = [
+        { freq: 100, source: 'Fundamental', order: 1, jrfl: false, inBand: false },
+        { freq: 200, source: 'H_2',         order: 2, jrfl: false, inBand: true  },
+        { freq: 300, source: 'SF-IMD',      order: 3, jrfl: true,  inBand: false }
+      ];
+      const csv = window.__engine.toCSV(rows);
+      const parsed = fromCSV(csv);
+      assertEqual(parsed.errors.length, 0);
+      assertEqual(parsed.rows.length, 3);
+      for (let i = 0; i < rows.length; i++) {
+        assertEqual(parsed.rows[i].freq,   rows[i].freq);
+        assertEqual(parsed.rows[i].source, rows[i].source);
+        assertEqual(parsed.rows[i].order,  rows[i].order);
+        assertEqual(parsed.rows[i].jrfl,   rows[i].jrfl);
+        assertEqual(parsed.rows[i].inBand, rows[i].inBand);
+      }
+    });
+
+    test('fromCSV: bad header rejected with error, no rows', () => {
+      const r = fromCSV('Wrong,Header,Layout\r\n100,200,300\r\n');
+      assertEqual(r.rows.length, 0);
+      if (r.errors.length === 0 || !/Header mismatch/i.test(r.errors[0])) {
+        throw new Error('expected Header mismatch error, got: ' + JSON.stringify(r.errors));
+      }
+    });
+
+    test('fromCSV: permissive boolean parser accepts TRUE / true / 1 / yes / empty', () => {
+      const csv =
+        'Freq (MHz),Source,Order,JRFL,In bounds\r\n' +
+        '100,A,1,TRUE,FALSE\r\n' +
+        '200,B,2,true,false\r\n' +
+        '300,C,3,1,0\r\n' +
+        '400,D,4,yes,no\r\n' +
+        '500,E,5,,\r\n';
+      const r = fromCSV(csv);
+      assertEqual(r.errors.length, 0);
+      assertEqual(r.rows.length, 5);
+      assertEqual(r.rows[0].jrfl, true);   assertEqual(r.rows[0].inBand, false);
+      assertEqual(r.rows[1].jrfl, true);   assertEqual(r.rows[1].inBand, false);
+      assertEqual(r.rows[2].jrfl, true);   assertEqual(r.rows[2].inBand, false);
+      assertEqual(r.rows[3].jrfl, true);   assertEqual(r.rows[3].inBand, false);
+      assertEqual(r.rows[4].jrfl, false);  assertEqual(r.rows[4].inBand, false);
     });
 
     console.info('Tests installed. Run window.runEngineTests().');
