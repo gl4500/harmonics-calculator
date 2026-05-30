@@ -176,7 +176,7 @@
     </header>
 
     <section class="card" id="card-control">
-      <h2>Control</h2>
+      <h2>Freq Range</h2>
       <div id="control-body"><!-- populated by ui --></div>
     </section>
 
@@ -652,7 +652,7 @@
       body.replaceChildren();
 
       body.append(el('div', { class: 'info' },
-        'Control sets only highlight bounds + JRFL list. Max Order and Filter Width are configured per section (SF-IMD) or per row (MT-IMD).'));
+        'Frequency range: start/stop bounds for in-band highlighting (green) and JRFL list for restricted-frequency hits (red). Max Order and Filter Width are configured per section (SF-IMD) or per row (MT-IMD).'));
 
       const row1 = el('div', { class: 'row' },
         el('label', { class: 'field' }, 'Start (MHz)',
