@@ -538,8 +538,30 @@
       return { sourceLabels, matrix };
     }
 
+    // toCSV(rows) → CSV string
+    // Columns: Freq (MHz), Source, Order, JRFL, In bounds
+    // Booleans rendered TRUE/FALSE. Rows sorted ascending by freq.
+    // Line endings: CRLF for Windows/Excel compatibility.
+    // No quoting: source labels are restricted to alphanumerics, '_', '#',
+    // hyphens, and spaces, none of which require CSV escaping.
+    export function toCSV(rows) {
+      const header = 'Freq (MHz),Source,Order,JRFL,In bounds';
+      const sorted = (rows ?? []).slice().sort((a, b) => a.freq - b.freq);
+      const lines = [header];
+      for (const r of sorted) {
+        lines.push([
+          String(r.freq),
+          r.source,
+          String(r.order),
+          r.jrfl ? 'TRUE' : 'FALSE',
+          r.inBand ? 'TRUE' : 'FALSE'
+        ].join(','));
+      }
+      return lines.join('\r\n') + '\r\n';
+    }
+
     // Exposed so tests module can import.
-    window.__engine = { harmonics, classify, enumerateIMD, calculate, buildPivot,
+    window.__engine = { harmonics, classify, enumerateIMD, calculate, buildPivot, toCSV,
                         MAX_ORDER_HARD_CAP, PER_ROW_PRODUCT_CAP, AUTO_WIDTH_K,
                         JRFL_TOL_MHZ, HEAVY_COMPUTE_THRESHOLD };
   </script>
@@ -913,6 +935,26 @@
       }
     }
 
+    function csvFilename() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `harmonics_results_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
+    }
+
+    function downloadCSV(result) {
+      const csv = window.__engine.toCSV(result.rows ?? []);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = csvFilename();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Revoke after a tick so Safari has time to start the download
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
     function renderViewToggle(result) {
       const wrap = el('span', { class: 'view-toggle' });
       const mkBtn = (label, mode) => el('button', {
@@ -921,6 +963,12 @@
       }, label);
       wrap.append(mkBtn('List', 'list'));
       wrap.append(mkBtn('Pivot', 'pivot'));
+      const exportBtn = el('button', {
+        title: 'Download results as CSV',
+        disabled: (result.rows?.length ?? 0) === 0 ? '' : null,
+        onclick: () => downloadCSV(result)
+      }, 'Export CSV');
+      wrap.append(exportBtn);
       return wrap;
     }
 
@@ -1317,6 +1365,29 @@
       if (inWindow.length === 0) throw new Error('expected ≥1 in-window MT-IMD product with auto filter width');
       const hasFilterWarn = r.warnings.some(w => /filter width/i.test(w));
       assertEqual(hasFilterWarn, false);
+    });
+
+    // ── toCSV() ─────────────────────────────────────────────────────
+    const { toCSV } = window.__engine;
+
+    test('toCSV: empty rows produces just the header + CRLF', () => {
+      const csv = toCSV([]);
+      assertEqual(csv, 'Freq (MHz),Source,Order,JRFL,In bounds\r\n');
+    });
+
+    test('toCSV: header + 3 rows match expected with TRUE/FALSE booleans, CRLF line endings, sorted ascending by freq', () => {
+      // Deliberately passed out of order to verify sort.
+      const rows = [
+        { freq: 200, source: 'H_2',         order: 2, jrfl: false, inBand: true  },
+        { freq: 100, source: 'Fundamental', order: 1, jrfl: false, inBand: false },
+        { freq: 300, source: 'H_3',         order: 3, jrfl: true,  inBand: false }
+      ];
+      const expected =
+        'Freq (MHz),Source,Order,JRFL,In bounds\r\n' +
+        '100,Fundamental,1,FALSE,FALSE\r\n' +
+        '200,H_2,2,FALSE,TRUE\r\n' +
+        '300,H_3,3,TRUE,FALSE\r\n';
+      assertEqual(toCSV(rows), expected);
     });
 
     console.info('Tests installed. Run window.runEngineTests().');

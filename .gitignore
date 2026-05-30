@@ -9,3 +9,11 @@ Thumbs.db
 
 # Local-only test caches
 node_modules/
+
+# Excel / Office lock files (created when the .xlsm is open)
+~$*
+
+# iPhone screenshots dropped into the project folder during debugging
+IMG_*.png
+IMG_*.jpg
+IMG_*.HEIC
