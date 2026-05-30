@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Harmonics &amp; IMD Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --border: #d8dde5;
+      --text: #1f2430;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --row-jrfl: #ffcccc;
+      --row-band: #ccffcc;
+      --danger: #b91c1c;
+      --shadow: 0 1px 2px rgba(0,0,0,.04), 0 1px 8px rgba(0,0,0,.04);
+    }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    main { max-width: 1100px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+    header h1 { margin: 0 0 4px; font-size: 20px; }
+    header p { margin: 0; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 16px; box-shadow: var(--shadow);
+      min-width: 0; }   /* allow grid items to shrink below content size so a wide
+                           pivot table inside one card doesn't widen all sibling cards */
+    .card h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .card .enable { margin: 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .row + .row { margin-top: 8px; }
+    label.field { display: inline-flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+    label.field input { width: 110px; }
+    input[type="number"], input[type="text"] {
+      padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit;
+      background: white;
+    }
+    input[type="number"]:focus, input[type="text"]:focus {
+      outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent);
+    }
+    button {
+      padding: 6px 12px; border: 1px solid var(--border); background: white; border-radius: 6px;
+      cursor: pointer; font: inherit;
+    }
+    button:hover { background: #f1f5f9; }
+    button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button.icon { padding: 2px 8px; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; background: #eef2f7;
+      border-radius: 14px; }
+    .chip input { width: 70px; padding: 2px 4px; border: none; background: transparent; text-align: right; }
+    .chip button { padding: 0 6px; border: none; background: transparent; color: var(--danger); cursor: pointer; }
+    .group-row { display: grid; grid-template-columns: repeat(5, minmax(80px, 1fr)) auto; gap: 8px; align-items: end; }
+    .group-row + .group-row { margin-top: 8px; }
+    .inline-error { color: var(--danger); font-size: 12px; margin-top: 4px; }
+    .summary { font-size: 13px; color: var(--muted); margin: 8px 0; }
+    .cap-banner { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412;
+      padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+      cursor: pointer; user-select: none; background: #fafbfc; position: sticky; top: 0; }
+    th .arrow { color: var(--text); margin-left: 4px; }
+    tr.jrfl td { background: var(--row-jrfl); }
+    tr.band td { background: var(--row-band); }
+    .results-scroll { max-height: 60vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+    .info { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .view-toggle {
+      display: inline-flex; gap: 4px; margin-left: 12px; vertical-align: middle;
+    }
+    .view-toggle button {
+      padding: 2px 10px; font-size: 12px; border-radius: 4px;
+    }
+    .view-toggle button.active {
+      background: var(--accent); color: white; border-color: var(--accent);
+    }
+    .pivot-scroll {
+      overflow: auto; border: 1px solid var(--border); border-radius: 6px; max-height: 60vh;
+    }
+    table.pivot { width: max-content; min-width: 100%; }
+    table.pivot th, table.pivot td {
+      border-bottom: 1px solid var(--border); padding: 6px 8px;
+      vertical-align: top; min-width: 64px;
+    }
+    table.pivot td:first-child, table.pivot th:first-child {
+      font-weight: 500; white-space: nowrap;
+      position: sticky; left: 0; background: var(--card); z-index: 1;
+    }
+    table.pivot th { background: #fafbfc; cursor: default; }
+    table.pivot th:first-child { background: #fafbfc; }
+    table.pivot .freq {
+      display: inline-block; padding: 2px 6px; border-radius: 4px;
+      margin: 2px; font-variant-numeric: tabular-nums;
+    }
+    table.pivot .freq.jrfl { background: var(--row-jrfl); }
+    table.pivot .freq.band { background: var(--row-band); }
+
+    @media (max-width: 700px) {
+      body { font-size: 15px; }
+
+      main { margin: 12px auto; padding: 0 12px; gap: 12px; }
+
+      .card { padding: 12px; }
+      .card h2 { font-size: 13px; }
+
+      /* ≥16px prevents iOS Safari auto-zoom on input focus */
+      input[type="number"], input[type="text"] { font-size: 16px; }
+
+      /* Control's Start/Stop row stacks vertically */
+      .row { flex-direction: column; align-items: stretch; gap: 6px; }
+      label.field { width: 100%; }
+      label.field input { width: 100%; }
+
+      /* MT-IMD group rows: 2-column grid, × button in row 3 right */
+      .group-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .group-row > button.icon { justify-self: end; grid-column: 2 / 3; }
+
+      /* Tap targets */
+      button.icon {
+        min-width: 32px; min-height: 32px;
+        padding: 4px 10px; font-size: 16px;
+      }
+
+      /* Chips */
+      .chip { padding: 4px 8px; }
+      .chip input { width: 90px; font-size: 16px; }
+
+      /* Pivot table: keep horizontal scroll, trim padding */
+      table.pivot th, table.pivot td { padding: 4px 6px; min-width: 56px; }
+      table.pivot .freq { margin: 1px; padding: 2px 5px; }
+
+      /* List table: trim padding */
+      th, td { padding: 4px 6px; }
+
+      /* View-toggle moves under the count text instead of inline */
+      .view-toggle { margin-left: 0; margin-top: 6px; }
+      #results-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="js-error" style="display:none; background:#ffe4e6; border:1px solid #b91c1c; color:#7f1d1d; padding:10px 14px; margin:12px; border-radius:6px; font:13px/1.4 system-ui; white-space:pre-wrap;"></div>
+  <script>
+    // On-page error visualizer — surfaces script errors that you can't see
+    // without a desktop browser's DevTools console. Catches both synchronous
+    // errors and unhandled promise rejections.
+    (function() {
+      var slot = document.getElementById('js-error');
+      function show(msg) {
+        slot.style.display = '';
+        slot.textContent = (slot.textContent ? slot.textContent + '\n\n' : '') + msg;
+      }
+      window.addEventListener('error', function(e) {
+        show('JS error: ' + (e.message || e.error || 'unknown') +
+             (e.filename ? '\n  at ' + e.filename + ':' + e.lineno + ':' + e.colno : ''));
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        show('Promise rejected: ' + (e.reason && e.reason.message || e.reason || 'unknown'));
+      });
+    })();
+  </script>
+
+  <main>
+    <header>
+      <h1>Harmonics &amp; IMD Calculator</h1>
+      <p>Compute harmonics and IMD products; flag JRFL hits and in-band frequencies.</p>
+    </header>
+
+    <section class="card" id="card-control">
+      <h2>Control</h2>
+      <div id="control-body"><!-- populated by ui --></div>
+    </section>
+
+    <section class="card" id="card-harm">
+      <h2><label class="enable"><input type="checkbox" id="harm-enable"> Harmonics (H<sub>2</sub>..H<sub>16</sub>)</label></h2>
+      <div id="harm-body"><!-- populated by ui --></div>
+    </section>
+
+    <section class="card" id="card-sfimd">
+      <h2><label class="enable"><input type="checkbox" id="sfimd-enable"> Single-Freq IMD</label></h2>
+      <div id="sfimd-body"><!-- populated by ui --></div>
+    </section>
+
+    <section class="card" id="card-mtimd">
+      <h2><label class="enable"><input type="checkbox" id="mtimd-enable"> Multi-Tone IMD</label></h2>
+      <div id="mtimd-body"><!-- populated by ui --></div>
+    </section>
+
+    <section class="actions">
+      <button id="btn-clear">Clear All</button>
+      <button id="btn-calc" class="primary">Calculate</button>
+    </section>
+
+    <section class="card" id="card-results">
+      <h2>Results</h2>
+      <div id="results-summary" class="summary">No calculation run yet.</div>
+      <div id="cap-banner-slot"></div>
+      <div class="results-scroll"><table id="results-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </main>
+
+  <script type="module" id="engine">
+    // ── ENGINE ── pure math. No DOM, no globals beyond exports.
+
+    export const ENGINE_VERSION = 'v1';
+    export const MAX_ORDER_HARD_CAP = 9;
+    export const PER_ROW_PRODUCT_CAP = 16000;
+    export const AUTO_WIDTH_K = 2.5;
+    export const JRFL_TOL_MHZ = 0.001;        // 1 kHz
+    export const HEAVY_COMPUTE_THRESHOLD = 5_000_000;
+
+    // harmonics(fundMHz, maxH=16) → [2·F, 3·F, …, maxH·F]
+    // Throws on non-finite fund. Returns [] if maxH < 2.
+    export function harmonics(fundMHz, maxH = 16) {
+      if (!Number.isFinite(fundMHz)) throw new Error('harmonics: fundMHz must be finite');
+      if (!Number.isFinite(maxH) || maxH < 2) return [];
+      const out = [];
+      for (let k = 2; k <= maxH; k++) out.push(fundMHz * k);
+      return out;
+    }
+
+    // classify(freq, ctl) → 'jrfl' | 'inBand' | 'none'
+    // Matches VBA: JRFL within 1 kHz wins over bounds.
+    // If both startF and stopF are finite, swap if stopF < startF.
+    export function classify(freqMHz, ctl) {
+      if (!Number.isFinite(freqMHz)) return 'none';
+      const { startF, stopF, jrfl } = ctl;
+      if (Array.isArray(jrfl)) {
+        for (let i = 0; i < jrfl.length; i++) {
+          if (Math.abs(freqMHz - jrfl[i]) <= JRFL_TOL_MHZ) return 'jrfl';
+        }
+      }
+      if (Number.isFinite(startF) && Number.isFinite(stopF)) {
+        let lo = startF, hi = stopF;
+        if (hi < lo) { const t = lo; lo = hi; hi = t; }
+        if (freqMHz >= lo && freqMHz <= hi) return 'inBand';
+      }
+      return 'none';
+    }
+
+    // enumerateIMD(tones, opts)
+    //   tones: number[] of frequencies (MHz, ≥0)
+    //   opts: { maxOrder, fLo, fHi, allowSingleTone, productCap = PER_ROW_PRODUCT_CAP }
+    // Returns: { products: [{ freq, order }], hitCap, rawCount }
+    //   products: sorted ascending by freq, deduped at 1 kHz key; each product
+    //     records the smallest order at which it was first discovered.
+    //   hitCap: true if PER_ROW_PRODUCT_CAP exceeded mid-enumeration.
+    //   rawCount: total coefficient tuples evaluated (diagnostic).
+    //
+    // Algorithm mirrors VBA EnumerateTuples + EvaluateAndStore:
+    //   - For each total order K in [2..maxOrder]:
+    //     enumerate every (k_1..k_N) with Σ|k_i| = K, k_i ∈ ℤ.
+    //   - Sign canonicalization: first nonzero coefficient must be positive
+    //     (drops the ± freq mirror, matches VBA).
+    //   - Filter: keep |Σ k_i·f_i| ∈ [fLo, fHi].
+    //   - Dedup key: Math.round(absFreq * 1000) (1 kHz precision).
+    //   - allowSingleTone=true: require nz ≥ 1 (pure single-tone harmonics allowed).
+    //     allowSingleTone=false: require nz ≥ 2 (Single_Freq_Harm handles harmonics).
+    export function enumerateIMD(tones, opts) {
+      const { maxOrder, fLo, fHi, allowSingleTone } = opts;
+      const productCap = opts.productCap ?? PER_ROW_PRODUCT_CAP;
+      const N = tones.length;
+      if (!Number.isFinite(maxOrder) || maxOrder < 2 || N === 0) {
+        return { products: [], hitCap: false, rawCount: 0 };
+      }
+      const seen = new Map();      // dictKey → order
+      let rawCount = 0;
+      let hitCap = false;
+
+      const coeffs = new Int32Array(N);
+      const minNz = allowSingleTone ? 1 : 2;
+
+      function evaluateAndStore(currentOrder) {
+        rawCount++;
+        let nz = 0;
+        for (let i = 0; i < N; i++) if (coeffs[i] !== 0) nz++;
+        if (nz < minNz) return;
+        // sign canonicalization: first nonzero must be positive
+        for (let i = 0; i < N; i++) {
+          if (coeffs[i] !== 0) {
+            if (coeffs[i] < 0) return;
+            break;
+          }
+        }
+        let freq = 0;
+        for (let i = 0; i < N; i++) if (coeffs[i] !== 0) freq += coeffs[i] * tones[i];
+        const absFreq = Math.abs(freq);
+        if (absFreq === 0) return;
+        if (absFreq < fLo || absFreq > fHi) return;
+        const key = Math.round(absFreq * 1000);
+        if (seen.has(key)) return;
+        if (seen.size >= productCap) { hitCap = true; return; }
+        seen.set(key, { freq: absFreq, order: currentOrder });
+      }
+
+      // Recursive tuple enumeration. idx in [0..N], remaining = magnitudes left to distribute.
+      function recurse(idx, remaining, currentOrder) {
+        if (hitCap) return;
+        if (idx === N) {
+          if (remaining === 0) evaluateAndStore(currentOrder);
+          return;
+        }
+        if (idx === N - 1) {
+          const mag = remaining;
+          if (mag === 0) {
+            coeffs[idx] = 0;
+            recurse(idx + 1, 0, currentOrder);
+          } else {
+            for (const sn of [-1, 1]) {
+              coeffs[idx] = sn * mag;
+              recurse(idx + 1, 0, currentOrder);
+              if (hitCap) return;
+            }
+          }
+          return;
+        }
+        for (let mag = 0; mag <= remaining; mag++) {
+          if (mag === 0) {
+            coeffs[idx] = 0;
+            recurse(idx + 1, remaining, currentOrder);
+          } else {
+            for (const sn of [-1, 1]) {
+              coeffs[idx] = sn * mag;
+              recurse(idx + 1, remaining - mag, currentOrder);
+              if (hitCap) return;
+            }
+          }
+          if (hitCap) return;
+        }
+      }
+
+      for (let K = 2; K <= maxOrder; K++) {
+        coeffs.fill(0);
+        recurse(0, K, K);
+        if (hitCap) break;
+      }
+
+      const products = Array.from(seen.values()).sort((a, b) => a.freq - b.freq);
+      return { products, hitCap, rawCount };
+    }
+
+    // calculate(scenario) → {
+    //   rows: [{ freq, source, order, jrfl, inBand }],   // sorted ascending by freq
+    //   warnings: string[],
+    //   sectionsRun: { harmonics, sfImd, mtImd },        // counts pre-merge
+    //   estimatedCombos: number,
+    //   capBanners: string[]                              // sections that hit productCap
+    // }
+    export function calculate(scenario) {
+      const warnings = [];
+      const capBanners = [];
+      const rows = [];
+      const sectionsRun = { harmonics: 0, sfImd: 0, mtImd: 0 };
+      let estimatedCombos = 0;
+
+      const c = scenario.control;
+      const ctl = {
+        startF: Number.isFinite(c.startF) ? c.startF : null,
+        stopF:  Number.isFinite(c.stopF)  ? c.stopF  : null,
+        jrfl: (c.jrfl ?? []).filter(Number.isFinite)
+      };
+
+      // Normalize a maxOrder candidate: default 5, clamp to [2, MAX_ORDER_HARD_CAP],
+      // emit a one-line warning identifying the section/group when clamped above the cap.
+      function normalizeMaxOrder(candidate, label) {
+        let mo = Number.isFinite(candidate) ? Math.trunc(candidate) : 5;
+        if (mo < 2) mo = 2;
+        if (mo > MAX_ORDER_HARD_CAP) {
+          warnings.push(`${label}: max order capped at ${MAX_ORDER_HARD_CAP}.`);
+          mo = MAX_ORDER_HARD_CAP;
+        }
+        return mo;
+      }
+
+      // ── Harmonics ────────────────────────────────────────────────
+      // Harmonics ALWAYS emit H_2..H_16 regardless of maxOrder (maxOrder
+      // governs IMD enumeration only — per spec).
+      if (scenario.harmonics?.enabled) {
+        const funds = (scenario.harmonics.fundamentals ?? []).filter(Number.isFinite);
+        for (const F of funds) {
+          rows.push({ freq: F, source: 'Fundamental', order: 1 });
+          const hs = harmonics(F, 16);
+          for (let k = 0; k < hs.length; k++) {
+            rows.push({ freq: hs[k], source: `H_${k + 2}`, order: k + 2 });
+          }
+        }
+        sectionsRun.harmonics = funds.length;
+      }
+
+      // ── Single-Freq IMD ──────────────────────────────────────────
+      // Section-level maxOrder + filterWidth (no Control fallback). When
+      // sfImd.filterWidth is missing, auto-fill from tone-list geometry:
+      //   multi-tone (spread > 0): fw_full = 2·(maxF − minF)·AUTO_WIDTH_K
+      //   single-tone (spread == 0): fw_full = 2·maxOrder·max(|tones|)
+      if (scenario.sfImd?.enabled) {
+        const s = scenario.sfImd;
+        const tones = (s.tones ?? []).filter(Number.isFinite);
+        if (tones.length === 0) {
+          warnings.push('SF-IMD enabled but no numeric tones.');
+        } else {
+          const sfMaxOrder = normalizeMaxOrder(s.maxOrder, 'SF-IMD');
+          const minF = Math.min(...tones), maxF = Math.max(...tones);
+          const center = (minF + maxF) / 2;
+          let fw;
+          if (Number.isFinite(s.filterWidth)) {
+            fw = Math.abs(s.filterWidth);
+          } else {
+            const spread = maxF - minF;
+            if (spread > 0) {
+              fw = 2 * spread * AUTO_WIDTH_K;
+            } else {
+              const maxAbsTone = Math.max(...tones.map(t => Math.abs(t)));
+              fw = 2 * sfMaxOrder * maxAbsTone;
+            }
+          }
+          const fLo = Math.max(0, center - fw / 2);
+          const fHi = center + fw / 2;
+          estimatedCombos += Math.pow(2 * tones.length + 1, sfMaxOrder);
+          const r = enumerateIMD(tones, { maxOrder: sfMaxOrder, fLo, fHi, allowSingleTone: true });
+          for (const p of r.products) rows.push({ freq: p.freq, source: 'SF-IMD', order: p.order });
+          if (r.hitCap) capBanners.push(`SF-IMD hit ${PER_ROW_PRODUCT_CAP}-product cap; tighten filter or lower max order.`);
+          sectionsRun.sfImd = tones.length;
+        }
+      }
+
+      // ── Multi-Tone IMD ───────────────────────────────────────────
+      // Per-row maxOrder + filterWidth (no Control fallback). When a row's
+      // filterWidth is missing, auto-fill: full BW = 2·(N−1)·Δf·AUTO_WIDTH_K
+      // (mirrors VBA MainModule.bas:503 where (N−1)·Δf·AUTO_WIDTH_K was the
+      // half-width; doubling gives the equivalent full-BW in our convention).
+      if (scenario.mtImd?.enabled) {
+        const groups = scenario.mtImd.groups ?? [];
+        for (let gi = 0; gi < groups.length; gi++) {
+          const g = groups[gi];
+          if (!Number.isFinite(g.fc) || !Number.isFinite(g.n) || g.n < 2
+              || !Number.isFinite(g.df) || g.df <= 0) continue;
+          const N = Math.trunc(g.n);
+          const mtMaxOrder = normalizeMaxOrder(g.maxOrder, `MT-IMD row ${gi + 1}`);
+          const fw = Number.isFinite(g.filterWidth)
+            ? Math.abs(g.filterWidth)
+            : 2 * (N - 1) * Math.abs(g.df) * AUTO_WIDTH_K;
+          const tones = [];
+          for (let i = 1; i <= N; i++) {
+            tones.push(g.fc + (i - (N + 1) / 2) * g.df);
+          }
+          const fLo = Math.max(0, g.fc - fw / 2);
+          const fHi = g.fc + fw / 2;
+          estimatedCombos += Math.pow(2 * N + 1, mtMaxOrder);
+          const r = enumerateIMD(tones, { maxOrder: mtMaxOrder, fLo, fHi, allowSingleTone: false });
+          for (const p of r.products) rows.push({ freq: p.freq, source: `MT-IMD #${gi + 1}`, order: p.order });
+          if (r.hitCap) capBanners.push(`MT-IMD row ${gi + 1} hit ${PER_ROW_PRODUCT_CAP}-product cap.`);
+          sectionsRun.mtImd++;
+        }
+      }
+
+      // dedup identical (freq-1kHz, source, order) tuples
+      const dedupKey = (r) => `${Math.round(r.freq * 1000)}|${r.source}|${r.order}`;
+      const seen = new Set();
+      const deduped = [];
+      for (const r of rows) {
+        const k = dedupKey(r);
+        if (seen.has(k)) continue;
+        seen.add(k); deduped.push(r);
+      }
+      deduped.sort((a, b) => a.freq - b.freq);
+
+      // annotate with classify
+      for (const r of deduped) {
+        const cls = classify(r.freq, ctl);
+        r.jrfl = cls === 'jrfl';
+        r.inBand = cls === 'inBand';
+      }
+
+      return { rows: deduped, warnings, sectionsRun, estimatedCombos, capBanners };
+    }
+
+    // buildPivot(rows) → { sourceLabels: string[], matrix: Map<string, Map<number, Cell[]>> }
+    //   where Cell = { freq: number, jrfl: boolean, inBand: boolean }
+    //
+    // Groups result rows by source:
+    //   - 'Fundamental' or 'H_<k>' → 'Harmonics'
+    //   - 'SF-IMD'                 → 'Single-Freq IMD'
+    //   - 'MT-IMD #<n>'            → 'Multi-Tone IMD #<n>' (one row per n)
+    //   - anything else            → 'Other' (catch-all safety net)
+    //
+    // Within each (source, order) cell, frequencies are sorted ascending.
+    // sourceLabels are ordered: Harmonics first, then Single-Freq IMD, then
+    // Multi-Tone IMD #1, #2, …, then 'Other' last.
+    export function buildPivot(rows) {
+      const matrix = new Map();        // sourceLabel → (order → Cell[])
+      const mtGroups = new Set();      // numeric N values seen for MT-IMD
+
+      function labelOf(source) {
+        if (source === 'Fundamental') return 'Harmonics';
+        if (/^H_\d+$/.test(source)) return 'Harmonics';
+        if (source === 'SF-IMD') return 'Single-Freq IMD';
+        const m = /^MT-IMD #(\d+)$/.exec(source);
+        if (m) {
+          const n = Number(m[1]);
+          mtGroups.add(n);
+          return `Multi-Tone IMD #${n}`;
+        }
+        return 'Other';
+      }
+
+      for (const r of rows) {
+        const label = labelOf(r.source);
+        if (!matrix.has(label)) matrix.set(label, new Map());
+        const byOrder = matrix.get(label);
+        if (!byOrder.has(r.order)) byOrder.set(r.order, []);
+        byOrder.get(r.order).push({ freq: r.freq, jrfl: !!r.jrfl, inBand: !!r.inBand });
+      }
+
+      // sort each cell ascending by freq
+      for (const byOrder of matrix.values()) {
+        for (const cells of byOrder.values()) {
+          cells.sort((a, b) => a.freq - b.freq);
+        }
+      }
+
+      // build ordered sourceLabels
+      const sourceLabels = [];
+      if (matrix.has('Harmonics')) sourceLabels.push('Harmonics');
+      if (matrix.has('Single-Freq IMD')) sourceLabels.push('Single-Freq IMD');
+      const mtSorted = [...mtGroups].sort((a, b) => a - b);
+      for (const n of mtSorted) sourceLabels.push(`Multi-Tone IMD #${n}`);
+      if (matrix.has('Other')) sourceLabels.push('Other');
+
+      return { sourceLabels, matrix };
+    }
+
+    // Exposed so tests module can import.
+    window.__engine = { harmonics, classify, enumerateIMD, calculate, buildPivot,
+                        MAX_ORDER_HARD_CAP, PER_ROW_PRODUCT_CAP, AUTO_WIDTH_K,
+                        JRFL_TOL_MHZ, HEAVY_COMPUTE_THRESHOLD };
+  </script>
+
+  <script type="module" id="state">
+    // ── STATE ── scenario object + localStorage autosave. No DOM.
+
+    const LS_KEY = 'harmonics_calc_v1';
+
+    export function newScenario() {
+      return {
+        // Control: highlighting only (start/stop bounds + JRFL list).
+        control: { startF: null, stopF: null, jrfl: [] },
+        // Harmonics: always emits H_2..H_16, no per-section settings.
+        harmonics: { enabled: true, fundamentals: [] },
+        // SF-IMD: section-level maxOrder + filterWidth (was Control's).
+        sfImd: { enabled: false, tones: [], maxOrder: null, filterWidth: null },
+        // MT-IMD: per-group maxOrder + filterWidth (was Control's).
+        mtImd: { enabled: false, groups: [] }   // group shape: { fc, n, df, maxOrder, filterWidth }
+      };
+    }
+
+    export function loadScenario() {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return newScenario();
+        const parsed = JSON.parse(raw);
+        // shallow merge against defaults — protects against missing sub-objects
+        const def = newScenario();
+        return {
+          control:   { ...def.control,   ...(parsed.control   ?? {}) },
+          harmonics: { ...def.harmonics, ...(parsed.harmonics ?? {}) },
+          sfImd:     { ...def.sfImd,     ...(parsed.sfImd     ?? {}) },
+          mtImd:     { ...def.mtImd,     ...(parsed.mtImd     ?? {}) }
+        };
+      } catch (e) {
+        console.warn('loadScenario: bad JSON in localStorage, using defaults', e);
+        return newScenario();
+      }
+    }
+
+    let saveTimer = null;
+    export function scheduleSave(scenario) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        try { localStorage.setItem(LS_KEY, JSON.stringify(scenario)); }
+        catch (e) { console.warn('scheduleSave: localStorage write failed', e); }
+      }, 250);
+    }
+
+    // expose for UI
+    window.__state = { newScenario, loadScenario, scheduleSave, LS_KEY };
+  </script>
+
+  <script type="module" id="ui">
+    // ── UI ── DOM rendering + event wiring.
+
+    const { newScenario, loadScenario, scheduleSave } = window.__state;
+
+    const state = { scenario: loadScenario() };
+
+    function num(v) {
+      if (v === '' || v === null || v === undefined) return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function el(tag, attrs = {}, ...kids) {
+      const e = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') e.className = v;
+        else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+        else if (v !== null && v !== undefined && v !== false) e.setAttribute(k, v);
+      }
+      for (const kid of kids.flat()) {
+        if (kid == null || kid === false) continue;
+        e.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+      }
+      return e;
+    }
+
+    function save() { scheduleSave(state.scenario); }
+
+    // ── Control card ─────────────────────────────────────────────────
+    function renderControl() {
+      const c = state.scenario.control;
+      const body = document.getElementById('control-body');
+      body.replaceChildren();
+
+      body.append(el('div', { class: 'info' },
+        'Control sets only highlight bounds + JRFL list. Max Order and Filter Width are configured per section (SF-IMD) or per row (MT-IMD).'));
+
+      const row1 = el('div', { class: 'row' },
+        el('label', { class: 'field' }, 'Start (MHz)',
+          el('input', {
+            type: 'number', inputmode: 'decimal', step: 'any', value: c.startF ?? '',
+            oninput: (e) => { c.startF = num(e.target.value); save(); }
+          })),
+        el('label', { class: 'field' }, 'Stop (MHz)',
+          el('input', {
+            type: 'number', inputmode: 'decimal', step: 'any', value: c.stopF ?? '',
+            oninput: (e) => { c.stopF = num(e.target.value); save(); }
+          })),
+      );
+      body.append(row1);
+
+      const jrflLabel = el('div', { class: 'info' }, 'JRFL frequencies (MHz, ±1 kHz match)');
+      const chipList = el('div', { class: 'chip-list' });
+      function rerenderChips() {
+        chipList.replaceChildren();
+        c.jrfl.forEach((v, i) => {
+          chipList.append(el('span', { class: 'chip' },
+            el('input', {
+              type: 'number', inputmode: 'decimal', step: 'any', value: v,
+              oninput: (e) => { c.jrfl[i] = num(e.target.value); save(); }
+            }),
+            el('button', { class: 'icon', title: 'Remove',
+              onclick: () => { c.jrfl.splice(i, 1); rerenderChips(); save(); } }, '×')
+          ));
+        });
+        chipList.append(el('button', {
+          class: 'icon', title: 'Add JRFL freq',
+          onclick: () => { c.jrfl.push(0); rerenderChips(); save(); }
+        }, '+'));
+      }
+      rerenderChips();
+      body.append(el('div', { class: 'row' }, jrflLabel));
+      body.append(el('div', { class: 'row' }, chipList));
+    }
+
+    renderControl();
+
+    // ── Harmonics card ───────────────────────────────────────────────
+    function renderHarm() {
+      const h = state.scenario.harmonics;
+      const enableBox = document.getElementById('harm-enable');
+      enableBox.checked = h.enabled;
+      enableBox.onchange = () => { h.enabled = enableBox.checked; save(); };
+
+      const body = document.getElementById('harm-body');
+      body.replaceChildren();
+      body.append(el('div', { class: 'info' }, 'Each fundamental F always yields H₂..H₁₆ = 2F..16F. The Max Order setting in Control only affects IMD enumeration.'));
+
+      const list = el('div', { class: 'chip-list' });
+      function rerender() {
+        list.replaceChildren();
+        h.fundamentals.forEach((v, i) => {
+          list.append(el('span', { class: 'chip' },
+            el('input', {
+              type: 'number', inputmode: 'decimal', step: 'any', value: v,
+              oninput: (e) => { h.fundamentals[i] = num(e.target.value); save(); }
+            }),
+            el('button', { class: 'icon', title: 'Remove',
+              onclick: () => { h.fundamentals.splice(i, 1); rerender(); save(); } }, '×')
+          ));
+        });
+        list.append(el('button', {
+          class: 'icon', title: 'Add fundamental',
+          onclick: () => { h.fundamentals.push(100); rerender(); save(); }
+        }, '+'));
+      }
+      rerender();
+      body.append(el('div', { class: 'row' }, list));
+    }
+
+    renderHarm();
+
+    // ── SF-IMD card ──────────────────────────────────────────────────
+    function renderSfImd() {
+      const s = state.scenario.sfImd;
+      const enableBox = document.getElementById('sfimd-enable');
+      enableBox.checked = s.enabled;
+      enableBox.onchange = () => { s.enabled = enableBox.checked; save(); };
+
+      const body = document.getElementById('sfimd-body');
+      body.replaceChildren();
+      body.append(el('div', { class: 'info' },
+        'List of N independent tones. Window = midpoint(min,max) ± filterWidth/2; ' +
+        'if Filter width is blank, auto-uses 2·(max−min)·AUTO_WIDTH_K ' +
+        '(or 2·maxOrder·|tone| for a single tone). ' +
+        'Single-tone harmonics ARE included (matches Single_Freq_IMD in spreadsheet).'));
+
+      body.append(el('div', { class: 'row' },
+        el('label', { class: 'field' }, 'Max order (2–9)',
+          el('input', {
+            type: 'number', inputmode: 'numeric', step: '1', min: '2', max: '9',
+            value: s.maxOrder ?? '', placeholder: '5',
+            oninput: (e) => { s.maxOrder = num(e.target.value); save(); }
+          })),
+        el('label', { class: 'field' }, 'Filter width (MHz, full BW)',
+          el('input', {
+            type: 'number', inputmode: 'decimal', step: 'any',
+            value: s.filterWidth ?? '', placeholder: 'auto',
+            oninput: (e) => { s.filterWidth = num(e.target.value); save(); }
+          })),
+      ));
+
+      const list = el('div', { class: 'chip-list' });
+      function rerender() {
+        list.replaceChildren();
+        s.tones.forEach((v, i) => {
+          list.append(el('span', { class: 'chip' },
+            el('input', {
+              type: 'number', inputmode: 'decimal', step: 'any', value: v,
+              oninput: (e) => { s.tones[i] = num(e.target.value); save(); }
+            }),
+            el('button', { class: 'icon', title: 'Remove',
+              onclick: () => { s.tones.splice(i, 1); rerender(); save(); } }, '×')
+          ));
+        });
+        list.append(el('button', {
+          class: 'icon', title: 'Add tone',
+          onclick: () => { s.tones.push(100); rerender(); save(); }
+        }, '+'));
+      }
+      rerender();
+      body.append(el('div', { class: 'row' }, list));
+    }
+
+    renderSfImd();
+
+    // ── MT-IMD card ──────────────────────────────────────────────────
+    function renderMtImd() {
+      const m = state.scenario.mtImd;
+      const enableBox = document.getElementById('mtimd-enable');
+      enableBox.checked = m.enabled;
+      enableBox.onchange = () => { m.enabled = enableBox.checked; save(); };
+
+      const body = document.getElementById('mtimd-body');
+      body.replaceChildren();
+      body.append(el('div', { class: 'info' },
+        'Each row: Fc + N uniformly-spaced tones at Δf, with its own Max Order and Filter Width. ' +
+        'Window = Fc ± filterWidth/2; if Filter width is blank, auto-uses (N−1)·Δf·2·AUTO_WIDTH_K. ' +
+        'Pure single-tone harmonics are NOT reported (matches MT_IMD_Calc in spreadsheet).'));
+
+      const list = el('div', {});
+      function groupError(g) {
+        if (!Number.isFinite(g.n) || g.n < 2) return 'N must be ≥ 2';
+        if (!Number.isFinite(g.df) || g.df <= 0) return 'Δf must be > 0';
+        if (!Number.isFinite(g.fc)) return 'Fc must be a number';
+        return null;
+      }
+      function rerender() {
+        // Only called on structural changes (add/remove). oninput handlers
+        // update state + the per-row error span in place — they MUST NOT
+        // call rerender, or the input the user is typing into gets replaced
+        // and loses focus after each keystroke.
+        list.replaceChildren();
+        m.groups.forEach((g, i) => {
+          // Back-fill maxOrder/filterWidth on groups loaded from older
+          // localStorage that don't have those keys yet.
+          if (!('maxOrder' in g)) g.maxOrder = null;
+          if (!('filterWidth' in g)) g.filterWidth = null;
+          const errSpan = el('div', { class: 'inline-error' });
+          const refreshErr = () => {
+            const msg = groupError(g);
+            errSpan.textContent = msg ?? '';
+            errSpan.style.display = msg ? '' : 'none';
+          };
+          const row = el('div', { class: 'group-row' },
+            el('label', { class: 'field' }, 'Fc (MHz)',
+              el('input', {
+                type: 'number', inputmode: 'decimal', step: 'any', value: g.fc,
+                oninput: (e) => { g.fc = num(e.target.value); refreshErr(); save(); }
+              })),
+            el('label', { class: 'field' }, 'N',
+              el('input', {
+                type: 'number', inputmode: 'numeric', step: '1', min: '2', value: g.n,
+                oninput: (e) => { g.n = num(e.target.value); refreshErr(); save(); }
+              })),
+            el('label', { class: 'field' }, 'Δf (MHz)',
+              el('input', {
+                type: 'number', inputmode: 'decimal', step: 'any', value: g.df,
+                oninput: (e) => { g.df = num(e.target.value); refreshErr(); save(); }
+              })),
+            el('label', { class: 'field' }, 'Max order',
+              el('input', {
+                type: 'number', inputmode: 'numeric',
+                step: '1', min: '2', max: '9',
+                value: g.maxOrder ?? '', placeholder: '5',
+                oninput: (e) => { g.maxOrder = num(e.target.value); save(); }
+              })),
+            el('label', { class: 'field' }, 'Filter (MHz)',
+              el('input', {
+                type: 'number', inputmode: 'decimal', step: 'any',
+                value: g.filterWidth ?? '', placeholder: 'auto',
+                oninput: (e) => { g.filterWidth = num(e.target.value); save(); }
+              })),
+            el('button', {
+              class: 'icon', title: 'Remove row',
+              onclick: () => { m.groups.splice(i, 1); rerender(); save(); }
+            }, '×')
+          );
+          list.append(row);
+          list.append(errSpan);
+          refreshErr();
+        });
+        list.append(el('div', { class: 'row' },
+          el('button', {
+            onclick: () => {
+              m.groups.push({ fc: 1000, n: 3, df: 10, maxOrder: null, filterWidth: null });
+              rerender(); save();
+            }
+          }, '+ Add group')));
+      }
+      rerender();
+      body.append(list);
+    }
+
+    renderMtImd();
+
+    // ── Calculate / Results ──────────────────────────────────────────
+    const sortState = { col: 'freq', dir: 'asc' };
+
+    function clampOrder(candidate) {
+      let mo = Number.isFinite(candidate) ? Math.trunc(candidate) : 5;
+      if (mo < 2) mo = 2;
+      if (mo > 9) mo = 9;
+      return mo;
+    }
+    function estimateCombos(scenario) {
+      let est = 0;
+      if (scenario.sfImd?.enabled) {
+        const n = (scenario.sfImd.tones ?? []).filter(Number.isFinite).length;
+        if (n > 0) est += Math.pow(2 * n + 1, clampOrder(scenario.sfImd.maxOrder));
+      }
+      if (scenario.mtImd?.enabled) {
+        for (const g of scenario.mtImd.groups ?? []) {
+          if (Number.isFinite(g.n) && g.n >= 2) {
+            est += Math.pow(2 * Math.trunc(g.n) + 1, clampOrder(g.maxOrder));
+          }
+        }
+      }
+      return est;
+    }
+
+    function sortRows(rows) {
+      const k = sortState.col, d = sortState.dir === 'asc' ? 1 : -1;
+      return rows.slice().sort((a, b) => {
+        const av = a[k], bv = b[k];
+        if (av === bv) return 0;
+        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * d;
+        return String(av).localeCompare(String(bv)) * d;
+      });
+    }
+
+    let viewMode = 'pivot';   // 'list' | 'pivot' — UI-local, not persisted
+
+    function renderResults(result) {
+      // Common: summary text + banners
+      const sum = document.getElementById('results-summary');
+      const banner = document.getElementById('cap-banner-slot');
+
+      banner.replaceChildren();
+      for (const b of result.capBanners ?? []) {
+        banner.append(el('div', { class: 'cap-banner' }, b));
+      }
+      for (const w of result.warnings ?? []) {
+        banner.append(el('div', { class: 'cap-banner' }, w));
+      }
+
+      const jrflHits = result.rows.filter(r => r.jrfl).length;
+      sum.replaceChildren();
+      sum.append(`${result.rows.length} products, ${jrflHits} JRFL hits.`);
+      sum.append(renderViewToggle(result));
+
+      if (viewMode === 'pivot') {
+        renderPivotTable(result);
+      } else {
+        renderListTable(result);
+      }
+    }
+
+    function renderViewToggle(result) {
+      const wrap = el('span', { class: 'view-toggle' });
+      const mkBtn = (label, mode) => el('button', {
+        class: viewMode === mode ? 'active' : '',
+        onclick: () => { viewMode = mode; renderResults(result); }
+      }, label);
+      wrap.append(mkBtn('List', 'list'));
+      wrap.append(mkBtn('Pivot', 'pivot'));
+      return wrap;
+    }
+
+    function renderListTable(result) {
+      const tbl = document.getElementById('results-table');
+      tbl.classList.remove('pivot');
+      tbl.parentElement.classList.remove('pivot-scroll');
+      tbl.parentElement.classList.add('results-scroll');
+      const thead = tbl.querySelector('thead');
+      const tbody = tbl.querySelector('tbody');
+
+      const cols = [
+        { key: 'freq', label: 'Freq (MHz)' },
+        { key: 'source', label: 'Source' },
+        { key: 'order', label: 'Order' },
+        { key: 'jrfl', label: 'JRFL hit' },
+        { key: 'inBand', label: 'In bounds' }
+      ];
+      thead.replaceChildren();
+      const trh = el('tr');
+      for (const c of cols) {
+        const arrow = sortState.col === c.key ? (sortState.dir === 'asc' ? '▲' : '▼') : '';
+        trh.append(el('th', {
+          onclick: () => {
+            if (sortState.col === c.key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+            else { sortState.col = c.key; sortState.dir = 'asc'; }
+            renderResults(result);
+          }
+        }, c.label, ' ', el('span', { class: 'arrow' }, arrow)));
+      }
+      thead.append(trh);
+
+      tbody.replaceChildren();
+      const sorted = sortRows(result.rows);
+      for (const r of sorted) {
+        const cls = r.jrfl ? 'jrfl' : (r.inBand ? 'band' : '');
+        const tr = el('tr', { class: cls },
+          el('td', {}, r.freq.toFixed(6).replace(/\.?0+$/, '')),
+          el('td', {}, r.source),
+          el('td', {}, String(r.order)),
+          el('td', {}, r.jrfl ? '✓' : ''),
+          el('td', {}, r.inBand ? '✓' : '')
+        );
+        tbody.append(tr);
+      }
+    }
+
+    function renderPivotTable(result) {
+      const tbl = document.getElementById('results-table');
+      const thead = tbl.querySelector('thead');
+      const tbody = tbl.querySelector('tbody');
+
+      // Apply pivot styling. Toggle the `pivot` class on the table element.
+      tbl.classList.add('pivot');
+      tbl.parentElement.classList.remove('results-scroll');
+      tbl.parentElement.classList.add('pivot-scroll');
+
+      const { sourceLabels, matrix } = window.__engine.buildPivot(result.rows);
+
+      // Header row: Source | Order 1 | Order 2 | ... | Order 16
+      thead.replaceChildren();
+      const trh = el('tr', {}, el('th', {}, 'Source'));
+      for (let o = 1; o <= 16; o++) trh.append(el('th', {}, `Order ${o}`));
+      thead.append(trh);
+
+      // Body rows
+      tbody.replaceChildren();
+      for (const label of sourceLabels) {
+        const byOrder = matrix.get(label);
+        const tr = el('tr', {}, el('td', {}, label));
+        for (let o = 1; o <= 16; o++) {
+          const cells = byOrder.get(o);
+          const td = el('td');
+          if (cells) {
+            for (const c of cells) {
+              const cls = c.jrfl ? 'freq jrfl' : (c.inBand ? 'freq band' : 'freq');
+              td.append(el('span', { class: cls }, c.freq.toFixed(6).replace(/\.?0+$/, '')));
+            }
+          }
+          tr.append(td);
+        }
+        tbody.append(tr);
+      }
+    }
+
+    document.getElementById('btn-calc').onclick = () => {
+      const est = estimateCombos(state.scenario);
+      if (est > window.__engine.HEAVY_COMPUTE_THRESHOLD) {
+        const ok = confirm(
+          `Heavy compute: ~${est.toLocaleString()} coefficient combos. Continue?`);
+        if (!ok) return;
+      }
+      const sectionsEnabled = state.scenario.harmonics?.enabled ||
+                              state.scenario.sfImd?.enabled ||
+                              state.scenario.mtImd?.enabled;
+      if (!sectionsEnabled) {
+        document.getElementById('results-summary').textContent = 'Enable at least one calculator.';
+        document.getElementById('results-table').querySelector('tbody').replaceChildren();
+        document.getElementById('cap-banner-slot').replaceChildren();
+        return;
+      }
+      const result = window.__engine.calculate(state.scenario);
+      renderResults(result);
+    };
+
+    document.getElementById('btn-clear').onclick = () => {
+      if (!confirm('Clear all inputs and results?')) return;
+      state.scenario = newScenario();
+      try { localStorage.removeItem(window.__state.LS_KEY); } catch {}
+      renderControl(); renderHarm(); renderSfImd(); renderMtImd();
+      document.getElementById('results-summary').textContent = 'No calculation run yet.';
+      document.getElementById('cap-banner-slot').replaceChildren();
+      document.getElementById('results-table').querySelector('thead').replaceChildren();
+      document.getElementById('results-table').querySelector('tbody').replaceChildren();
+    };
+
+    // expose for other UI tasks
+    window.__ui = { state, el, num, save, renderControl };
+  </script>
+
+  <script type="module" id="tests">
+    // ── TESTS ── golden vectors. Run with: runEngineTests() in DevTools console.
+
+    const tests = [];
+
+    function test(name, fn) { tests.push({ name, fn }); }
+
+    function assertEqual(actual, expected, msg = '') {
+      if (actual !== expected) throw new Error(`${msg} expected ${expected}, got ${actual}`);
+    }
+    function assertArrayClose(actual, expected, tol = 1e-9, msg = '') {
+      if (!Array.isArray(actual)) throw new Error(`${msg} not an array: ${actual}`);
+      if (actual.length !== expected.length) throw new Error(
+        `${msg} length expected ${expected.length}, got ${actual.length}`);
+      for (let i = 0; i < expected.length; i++) {
+        if (Math.abs(actual[i] - expected[i]) > tol) throw new Error(
+          `${msg} [${i}] expected ${expected[i]}, got ${actual[i]}`);
+      }
+    }
+
+    function runEngineTests() {
+      let passed = 0, failed = 0;
+      console.group(`Engine tests (${tests.length})`);
+      for (const t of tests) {
+        try { t.fn(); console.log('PASS', t.name); passed++; }
+        catch (e) { console.error('FAIL', t.name, '—', e.message); failed++; }
+      }
+      console.groupEnd();
+      console.log(`%c${passed} passed, ${failed} failed`,
+        failed === 0 ? 'color:green' : 'color:red');
+      return { passed, failed };
+    }
+    window.runEngineTests = runEngineTests;
+
+    // ── harmonics() ──────────────────────────────────────────────────
+    const { harmonics } = window.__engine;
+
+    test('harmonics(100, 16) yields 200..1600 in steps of 100', () => {
+      const expected = [];
+      for (let k = 2; k <= 16; k++) expected.push(100 * k);
+      assertArrayClose(harmonics(100, 16), expected);
+    });
+
+    test('harmonics(100, 4) returns 200, 300, 400', () => {
+      assertArrayClose(harmonics(100, 4), [200, 300, 400]);
+    });
+
+    test('harmonics(0, 4) returns [0, 0, 0]', () => {
+      assertArrayClose(harmonics(0, 4), [0, 0, 0]);
+    });
+
+    test('harmonics(F, 1) returns []', () => {
+      assertEqual(harmonics(123.456, 1).length, 0);
+    });
+
+    test('harmonics(NaN) throws', () => {
+      let threw = false;
+      try { harmonics(NaN); } catch { threw = true; }
+      assertEqual(threw, true);
+    });
+
+    // ── classify() ──────────────────────────────────────────────────
+    const { classify } = window.__engine;
+
+    test('classify: JRFL exact match → jrfl', () => {
+      assertEqual(classify(225.0, { startF: 100, stopF: 300, jrfl: [225.0] }), 'jrfl');
+    });
+    test('classify: JRFL within 1 kHz → jrfl', () => {
+      assertEqual(classify(225.0009, { startF: 100, stopF: 300, jrfl: [225.0] }), 'jrfl');
+    });
+    test('classify: JRFL beyond 1 kHz → not jrfl', () => {
+      assertEqual(classify(225.0011, { startF: 100, stopF: 300, jrfl: [225.0] }), 'inBand');
+    });
+    test('classify: in-band, no JRFL → inBand', () => {
+      assertEqual(classify(200, { startF: 100, stopF: 300, jrfl: [] }), 'inBand');
+    });
+    test('classify: bounds swapped → still inBand', () => {
+      assertEqual(classify(200, { startF: 300, stopF: 100, jrfl: [] }), 'inBand');
+    });
+    test('classify: out of band, no JRFL → none', () => {
+      assertEqual(classify(50, { startF: 100, stopF: 300, jrfl: [] }), 'none');
+    });
+    test('classify: missing bounds → none', () => {
+      assertEqual(classify(200, { startF: null, stopF: null, jrfl: [] }), 'none');
+    });
+    test('classify: JRFL beats in-band (red wins)', () => {
+      assertEqual(classify(200, { startF: 100, stopF: 300, jrfl: [200] }), 'jrfl');
+    });
+
+    // ── enumerateIMD() ───────────────────────────────────────────────
+    const { enumerateIMD } = window.__engine;
+
+    function freqsOf(result) { return result.products.map(p => p.freq); }
+
+    test('IMD 2-tone (100, 110), order=3, wide filter', () => {
+      const r = enumerateIMD([100, 110],
+        { maxOrder: 3, fLo: 0, fHi: 1000, allowSingleTone: false });
+      const f = freqsOf(r);
+      // Expected products with nz≥2 within [0,1000]:
+      //   order 2: f2-f1=10, f1+f2=210
+      //   order 3: 2f1-f2=90, 2f2-f1=120, 2f1+f2=310, f1+2f2=320
+      // sorted ascending: 10, 90, 120, 210, 310, 320
+      assertArrayClose(f, [10, 90, 120, 210, 310, 320], 1e-9, '2-tone order 3');
+    });
+
+    test('IMD allowSingleTone=true includes 2·F and 3·F', () => {
+      const r = enumerateIMD([100],
+        { maxOrder: 3, fLo: 0, fHi: 1000, allowSingleTone: true });
+      assertArrayClose(freqsOf(r), [200, 300], 1e-9, 'single tone harmonics included');
+    });
+
+    test('IMD allowSingleTone=false excludes pure harmonics', () => {
+      const r = enumerateIMD([100],
+        { maxOrder: 3, fLo: 0, fHi: 1000, allowSingleTone: false });
+      assertEqual(r.products.length, 0);
+    });
+
+    test('IMD filter window excludes out-of-band products', () => {
+      const r = enumerateIMD([100, 110],
+        { maxOrder: 3, fLo: 100, fHi: 200, allowSingleTone: false });
+      // Of {90, 120, 210, 310, 320}, only 120 is in [100, 200].
+      assertArrayClose(freqsOf(r), [120], 1e-9);
+    });
+
+    test('IMD dedup: same freq from different tuples appears once', () => {
+      // tones=[100,200]: f1+f2 = 300, 3*f1 = 300, 2*f1+0*f2 = 200, etc.
+      // With allowSingleTone=true and maxOrder=3, 300 can come from f1+f2 (order 2)
+      // and 3*f1 (order 3). Dedup keeps one entry; order should be the smaller (2).
+      const r = enumerateIMD([100, 200],
+        { maxOrder: 3, fLo: 250, fHi: 350, allowSingleTone: true });
+      // products in [250,350]: 300
+      assertArrayClose(freqsOf(r), [300]);
+      assertEqual(r.products[0].order, 2);
+    });
+
+    test('IMD productCap is honored', () => {
+      const r = enumerateIMD([100, 110, 120, 130, 140],
+        { maxOrder: 7, fLo: 0, fHi: 100000, allowSingleTone: true, productCap: 5 });
+      assertEqual(r.hitCap, true);
+    });
+
+    test('IMD maxOrder<2 returns no products', () => {
+      const r = enumerateIMD([100, 110],
+        { maxOrder: 1, fLo: 0, fHi: 1000, allowSingleTone: false });
+      assertEqual(r.products.length, 0);
+    });
+
+    // ── calculate() ──────────────────────────────────────────────────
+    const { calculate, newScenario } = (() => {
+      const e = window.__engine; const s = window.__state;
+      return { calculate: e.calculate, newScenario: s.newScenario };
+    })();
+
+    test('calculate: harmonics-only of 100 → Fundamental + H_2..H_16 (harmonics has no maxOrder dependency)', () => {
+      const sc = newScenario();
+      sc.harmonics = { enabled: true, fundamentals: [100] };
+      sc.sfImd.enabled = false; sc.mtImd.enabled = false;
+      const r = calculate(sc);
+      const expected = [100];
+      for (let k = 2; k <= 16; k++) expected.push(100 * k);
+      assertArrayClose(r.rows.map(x => x.freq), expected);
+      assertEqual(r.rows[0].source, 'Fundamental');
+      assertEqual(r.rows[1].source, 'H_2');
+      assertEqual(r.rows[15].source, 'H_16');
+    });
+
+    test('calculate: JRFL hit marks row.jrfl=true and not inBand', () => {
+      const sc = newScenario();
+      sc.control = { startF: 100, stopF: 600, jrfl: [200] };
+      sc.harmonics = { enabled: true, fundamentals: [100] };
+      sc.sfImd.enabled = false; sc.mtImd.enabled = false;
+      const r = calculate(sc);
+      const row200 = r.rows.find(x => x.freq === 200);
+      assertEqual(row200.jrfl, true);
+      assertEqual(row200.inBand, false);
+    });
+
+    test('calculate: in-band but not JRFL marks inBand=true', () => {
+      const sc = newScenario();
+      sc.control = { startF: 100, stopF: 600, jrfl: [] };
+      sc.harmonics = { enabled: true, fundamentals: [100] };
+      sc.sfImd.enabled = false; sc.mtImd.enabled = false;
+      const r = calculate(sc);
+      const row200 = r.rows.find(x => x.freq === 200);
+      assertEqual(row200.inBand, true);
+      assertEqual(row200.jrfl, false);
+    });
+
+    test('calculate: MT-IMD group with per-row maxOrder=3, filterWidth=100 yields in-window products', () => {
+      const sc = newScenario();
+      sc.harmonics.enabled = false;
+      sc.sfImd.enabled = false;
+      sc.mtImd = { enabled: true, groups: [{ fc: 1000, n: 3, df: 10, maxOrder: 3, filterWidth: 100 }] };
+      const r = calculate(sc);
+      const inWindow = r.rows.filter(x => x.freq >= 950 && x.freq <= 1050);
+      if (inWindow.length === 0) throw new Error('expected ≥1 in-window MT-IMD product');
+      const has1980 = r.rows.some(x => Math.abs(x.freq - 1980) < 0.001);
+      assertEqual(has1980, false);
+    });
+
+    test('calculate: SF-IMD per-section maxOrder>9 is capped and warned', () => {
+      const sc = newScenario();
+      sc.harmonics.enabled = false;
+      sc.sfImd = { enabled: true, tones: [100, 110], maxOrder: 20, filterWidth: null };
+      sc.mtImd.enabled = false;
+      const r = calculate(sc);
+      const hadWarn = r.warnings.some(w => /SF-IMD.*capped/i.test(w));
+      assertEqual(hadWarn, true);
+    });
+
+    // ── buildPivot() ─────────────────────────────────────────────────
+    const { buildPivot } = window.__engine;
+
+    test('buildPivot: Harmonics + SF-IMD scenario produces grouped matrix', () => {
+      const rows = [
+        { freq: 100, source: 'Fundamental', order: 1, jrfl: false, inBand: false },
+        { freq: 200, source: 'H_2',         order: 2, jrfl: false, inBand: true  },
+        { freq: 300, source: 'H_3',         order: 3, jrfl: true,  inBand: false },
+        { freq: 90,  source: 'SF-IMD',      order: 3, jrfl: false, inBand: false },
+        { freq: 120, source: 'SF-IMD',      order: 3, jrfl: false, inBand: false }
+      ];
+      const { sourceLabels, matrix } = buildPivot(rows);
+      assertEqual(sourceLabels.length, 2);
+      assertEqual(sourceLabels[0], 'Harmonics');
+      assertEqual(sourceLabels[1], 'Single-Freq IMD');
+      const harm = matrix.get('Harmonics');
+      assertEqual(harm.get(1)[0].freq, 100);
+      assertEqual(harm.get(2)[0].freq, 200);
+      assertEqual(harm.get(2)[0].inBand, true);
+      assertEqual(harm.get(3)[0].freq, 300);
+      assertEqual(harm.get(3)[0].jrfl, true);
+      const sf = matrix.get('Single-Freq IMD');
+      // cell freqs sorted ascending: [90, 120]
+      assertEqual(sf.get(3).length, 2);
+      assertEqual(sf.get(3)[0].freq, 90);
+      assertEqual(sf.get(3)[1].freq, 120);
+    });
+
+    test('buildPivot: multiple MT-IMD groups ordered by numeric N', () => {
+      const rows = [
+        { freq: 1000, source: 'MT-IMD #2', order: 3, jrfl: false, inBand: false },
+        { freq: 500,  source: 'MT-IMD #1', order: 3, jrfl: false, inBand: false },
+        { freq: 1500, source: 'MT-IMD #10', order: 3, jrfl: false, inBand: false }
+      ];
+      const { sourceLabels } = buildPivot(rows);
+      assertEqual(sourceLabels.length, 3);
+      assertEqual(sourceLabels[0], 'Multi-Tone IMD #1');
+      assertEqual(sourceLabels[1], 'Multi-Tone IMD #2');
+      // #10 sorted numerically AFTER #2, not alphabetically before
+      assertEqual(sourceLabels[2], 'Multi-Tone IMD #10');
+    });
+
+    // ── SF-IMD auto-width fallback (UX parity with MT-IMD) ─────────────
+    test('calculate: SF-IMD with null section filterWidth auto-uses spread-based default, no warning', () => {
+      const sc = newScenario();
+      sc.harmonics.enabled = false;
+      sc.sfImd = { enabled: true, tones: [100, 110], maxOrder: 3, filterWidth: null };
+      sc.mtImd.enabled = false;
+      const r = calculate(sc);
+      const sfRows = r.rows.filter(x => x.source === 'SF-IMD');
+      if (sfRows.length === 0) throw new Error('expected ≥1 SF-IMD product with auto filter width');
+      const hasFilterWarn = r.warnings.some(w => /SF-IMD.*filter width/i.test(w));
+      assertEqual(hasFilterWarn, false);
+    });
+
+    // ── MT-IMD auto-width fallback (matches VBA MainModule.bas:503) ────
+    test('calculate: MT-IMD with null per-row filterWidth auto-uses (N−1)·Δf·2·AUTO_WIDTH_K, no warning', () => {
+      const sc = newScenario();
+      sc.harmonics.enabled = false;
+      sc.sfImd.enabled = false;
+      sc.mtImd = { enabled: true, groups: [{ fc: 1000, n: 3, df: 10, maxOrder: 3, filterWidth: null }] };
+      const r = calculate(sc);
+      const inWindow = r.rows.filter(x => x.freq >= 950 && x.freq <= 1050);
+      if (inWindow.length === 0) throw new Error('expected ≥1 in-window MT-IMD product with auto filter width');
+      const hasFilterWarn = r.warnings.some(w => /filter width/i.test(w));
+      assertEqual(hasFilterWarn, false);
+    });
+
+    console.info('Tests installed. Run window.runEngineTests().');
+  </script>
+
+  <!--
+    Validation notes (2026-05-29):
+      - Filter-width convention: this app treats filter width as FULL bandwidth
+        everywhere. The original spreadsheet's MT_IMD_Calc treated it as
+        one-sided. To reproduce a spreadsheet MT-IMD result here, use 2× the
+        spreadsheet's F-col value as Control → Filter width.
+      - Single-tone harmonics:
+          Harmonics card  → always emits H_2..H_min(16,maxOrder)
+          SF-IMD card     → includes pure n·F_i products (matches VBA allowSingleTone=True)
+          MT-IMD card     → excludes pure n·F_i (matches VBA nz≥2 rule)
+      - Dedup is per (1 kHz rounded freq, source, order). Different sources at
+        the same frequency are intentionally kept (e.g. H_2 of 100 MHz and an
+        IMD product both at 200 MHz appear as two rows).
+  -->
+</body>
+</html>

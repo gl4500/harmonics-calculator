@@ -1,0 +1,11 @@
+# Extracted xlsm contents (binary VBA dump + sheet XMLs) — not needed in repo
+_extract/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+
+# Local-only test caches
+node_modules/
